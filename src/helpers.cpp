@@ -1,6 +1,7 @@
 #include "helpers.h"
 
 #include <algorithm>
+#include <cstring>
 #include <ctime>
 #include <filesystem>
 #include <iostream>
@@ -45,6 +46,43 @@ std::string WindowsifyFilePath(const fs::path &path) {
     std::string filePath = path.u8string();
     std::replace(filePath.begin(), filePath.end(), '/', '\\');
     return filePath;
+}
+
+std::string StormErrorString(uint32_t err) {
+    switch (err) {
+            // clang-format off
+        case ERROR_SUCCESS:                return "Success";
+        case ERROR_FILE_NOT_FOUND:         return "File not found";
+        case ERROR_ACCESS_DENIED:          return "Access denied (archive may be read-only or have open files)";
+        case ERROR_INVALID_HANDLE:         return "Invalid handle";
+        case ERROR_NOT_ENOUGH_MEMORY:      return "Not enough memory";
+        case ERROR_NOT_SUPPORTED:          return "Operation not supported";
+        case ERROR_INVALID_PARAMETER:      return "Invalid parameter";
+        case ERROR_DISK_FULL:              return "Disk full";
+        case ERROR_ALREADY_EXISTS:         return "Already exists";
+        case ERROR_INSUFFICIENT_BUFFER:    return "Insufficient buffer";
+        case ERROR_BAD_FORMAT:             return "Bad MPQ format";
+        case ERROR_NO_MORE_FILES:          return "No more files";
+        case ERROR_HANDLE_EOF:             return "End of file";
+        case ERROR_CAN_NOT_COMPLETE:       return "Cannot complete";
+        case ERROR_FILE_CORRUPT:           return "File is corrupt";
+        case ERROR_BUFFER_OVERFLOW:        return "Buffer overflow";
+        case ERROR_INVALID_DATA:           return "Invalid data";
+        case ERROR_NO_UNICODE_TRANSLATION: return "No Unicode translation";
+        case ERROR_AVI_FILE:               return "Not an MPQ file (AVI file)";
+        case ERROR_UNKNOWN_FILE_KEY:       return "Unknown file encryption key";
+        case ERROR_CHECKSUM_ERROR:         return "Sector checksum mismatch";
+        case ERROR_INTERNAL_FILE:          return "Operation not allowed on internal file";
+        case ERROR_BASE_FILE_MISSING:      return "Base file missing for incremental patch";
+        case ERROR_MARKED_FOR_DELETE:      return "File is marked as deleted in the MPQ";
+        case ERROR_FILE_INCOMPLETE:        return "Required file part is missing";
+        case ERROR_UNKNOWN_FILE_NAMES:     return "At least one file name is unknown (listfile is incomplete)";
+        case ERROR_CANT_FIND_PATCH_PREFIX: return "Cannot find patch prefix";
+        case ERROR_FAKE_MPQ_HEADER:        return "Fake MPQ header at this position";
+        case ERROR_FILE_DELETED:           return "File contains delete marker";
+        default:                           return std::strerror(static_cast<int>(err));
+            // clang-format on
+    }
 }
 
 uint32_t CalculateMpqMaxFileValue(const std::string &path) {

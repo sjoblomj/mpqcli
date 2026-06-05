@@ -44,7 +44,6 @@ int HandleAbout() {
 int HandleInfo(const std::string &target, const std::optional<std::string> &property) {
     HANDLE hArchive;
     if (!OpenMpqArchive(target, &hArchive, MPQ_OPEN_READ_ONLY)) {
-        std::cerr << "[!] Failed to open MPQ archive." << std::endl;
         return 1;
     }
     PrintMpqInfo(hArchive, property);
@@ -149,7 +148,6 @@ int HandleAdd(const std::vector<std::string> &files, const std::string &target,
               int64_t fileDwCompression, int64_t fileDwCompressionNext) {
     HANDLE hArchive;
     if (!OpenMpqArchive(target, &hArchive, 0)) {
-        std::cerr << "[!] Failed to open MPQ archive." << std::endl;
         return 1;
     }
 
@@ -213,7 +211,6 @@ int HandleRemove(const std::vector<std::string> &files, const std::string &targe
                  const std::optional<std::string> &locale) {
     HANDLE hArchive;
     if (!OpenMpqArchive(target, &hArchive, 0)) {
-        std::cerr << "[!] Failed to open MPQ archive." << std::endl;
         return 1;
     }
 
@@ -237,7 +234,6 @@ int HandleList(const std::string &target, const std::optional<std::string> &list
                bool listAll, bool listDetailed, const std::vector<std::string> &properties) {
     HANDLE hArchive;
     if (!OpenMpqArchive(target, &hArchive, MPQ_OPEN_READ_ONLY)) {
-        std::cerr << "[!] Failed to open MPQ archive." << std::endl;
         return 1;
     }
     ListFiles(hArchive, listfileName, listAll, listDetailed, properties);
@@ -266,7 +262,6 @@ int HandleExtract(const std::string &target, const std::optional<std::string> &o
 
     HANDLE hArchive;
     if (!OpenMpqArchive(target, &hArchive, MPQ_OPEN_READ_ONLY)) {
-        std::cerr << "[!] Failed to open MPQ archive." << std::endl;
         return 1;
     }
 
@@ -294,7 +289,6 @@ int HandleRead(const std::string &file, const std::string &target,
                const std::optional<std::string> &locale) {
     HANDLE hArchive;
     if (!OpenMpqArchive(target, &hArchive, MPQ_OPEN_READ_ONLY)) {
-        std::cerr << "[!] Failed to open MPQ archive." << std::endl;
         return 1;
     }
 
@@ -319,7 +313,6 @@ int HandleRead(const std::string &file, const std::string &target,
 int HandleVerify(const std::string &target, bool printSignature) {
     HANDLE hArchive;
     if (!OpenMpqArchive(target, &hArchive, MPQ_OPEN_READ_ONLY)) {
-        std::cerr << "[!] Failed to open MPQ archive." << std::endl;
         return 1;
     }
 

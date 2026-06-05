@@ -23,7 +23,9 @@ static const std::vector<std::string> kSpecialMpqFiles = {"(listfile)", "(signat
 
 bool OpenMpqArchive(const std::string &filename, HANDLE *hArchive, int32_t flags) {
     if (!SFileOpenArchive(filename.c_str(), 0, flags, hArchive)) {
-        std::cerr << "[!] Failed to open: " << filename << std::endl;
+        const auto error = SErrGetLastError();
+        std::cerr << "[!] Failed to open MPQ archive: " << filename << ": (" << error << ") "
+                  << StormErrorString(error) << std::endl;
         return false;
     }
     return true;
@@ -31,7 +33,9 @@ bool OpenMpqArchive(const std::string &filename, HANDLE *hArchive, int32_t flags
 
 bool CloseMpqArchive(HANDLE hArchive) {
     if (!SFileCloseArchive(hArchive)) {
-        std::cerr << "[!] Failed to close MPQ archive." << std::endl;
+        const auto error = SErrGetLastError();
+        std::cerr << "[!] Failed to close MPQ archive: (" << error << ") "
+                  << StormErrorString(error) << std::endl;
         return false;
     }
     return true;
@@ -54,7 +58,9 @@ bool FileExistsInArchiveForLocale(const HANDLE hArchive, const std::string &file
 
 bool SignMpqArchive(HANDLE hArchive) {
     if (!SFileSignArchive(hArchive, SIGNATURE_TYPE_WEAK)) {
-        std::cerr << "[!] Failed to sign MPQ archive." << std::endl;
+        const auto error = SErrGetLastError();
+        std::cerr << "[!] Failed to sign MPQ archive: (" << error << ") " << StormErrorString(error)
+                  << std::endl;
         return false;
     }
     return true;
@@ -70,7 +76,6 @@ int ExtractFiles(HANDLE hArchive, const std::string &output,
     HANDLE findHandle = SFileFindFirstFile(hArchive, "*", &findData, listfile);
     if (findHandle == nullptr) {
         std::cerr << "[!] Failed to find first file in MPQ archive." << std::endl;
-        SFileCloseArchive(hArchive);
         return 1;
     }
 
@@ -133,8 +138,9 @@ int ExtractFile(HANDLE hArchive, const std::string &output, const std::string &f
     if (SFileExtractFile(hArchive, szFileName, outputFileName.c_str(), 0)) {
         std::cout << "[*] Extracted: " << fileNameString << std::endl;
     } else {
-        int32_t error = SErrGetLastError();
-        std::cerr << "[!] Failed: " << "(" << error << ") " << szFileName << std::endl;
+        const auto error = SErrGetLastError();
+        std::cerr << "[!] Failed: (" << error << ") " << StormErrorString(error) << ": "
+                  << szFileName << std::endl;
         return 1;
     }
 
@@ -170,9 +176,9 @@ HANDLE CreateMpqArchive(const std::string &outputArchiveName, const uint32_t fil
     const bool result = SFileCreateArchive2(outputArchiveName.c_str(), &createInfo, &hMpq);
 
     if (!result) {
-        std::cerr << "[!] Failed to create MPQ archive: " << outputArchiveName << std::endl;
-        int32_t error = SErrGetLastError();
-        std::cout << "[!] Error: " << error << std::endl;
+        const auto error = SErrGetLastError();
+        std::cerr << "[!] Failed to create MPQ archive: " << outputArchiveName << ": (" << error
+                  << ") " << StormErrorString(error) << std::endl;
         return nullptr;
     }
 
@@ -291,9 +297,9 @@ int AddFile(HANDLE hArchive, const fs::path &localFile, const std::string &archi
         uint32_t newMaxFiles = NextPowerOfTwo(static_cast<uint32_t>(numberOfFiles + 1));
         bool setMaxFileCount = SFileSetMaxFileCount(hArchive, newMaxFiles);
         if (!setMaxFileCount) {
-            int32_t error = SErrGetLastError();
-            std::cerr << "[!] Error: " << error
-                      << " Failed to increase new max file count to: " << newMaxFiles << std::endl;
+            const auto error = SErrGetLastError();
+            std::cerr << "[!] Failed to increase new max file count to " << newMaxFiles << ": ("
+                      << error << ") " << StormErrorString(error) << std::endl;
             return 1;
         }
     }
@@ -325,8 +331,9 @@ int AddFile(HANDLE hArchive, const fs::path &localFile, const std::string &archi
                                     dwFlags, dwCompression, dwCompressionNext);
 
     if (!addedFile) {
-        int32_t error = SErrGetLastError();
-        std::cerr << "[!] Error: " << error << " Failed to add: " << archiveFilePath << std::endl;
+        const auto error = SErrGetLastError();
+        std::cerr << "[!] Failed to add: " << archiveFilePath << ": (" << error << ") "
+                  << StormErrorString(error) << std::endl;
         return 1;
     }
 
@@ -386,7 +393,6 @@ int ListFiles(HANDLE hArchive, const std::optional<std::string> &listfileName, b
     HANDLE findHandle = SFileFindFirstFile(hArchive, "*", &findData, listfile);
     if (findHandle == nullptr) {
         std::cerr << "[!] Failed to find first file in MPQ archive." << std::endl;
-        SFileCloseArchive(hArchive);
         return -1;
     }
 

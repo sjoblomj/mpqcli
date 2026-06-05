@@ -19,7 +19,7 @@ int main(int argc, char **argv) {
 
     // CLI: base
     // These are reused in multiple subcommands
-    // clang-format off: preserve column-aligned flag-to-char mappings
+    // clang-format off
     std::string baseTarget;                        // all subcommands
     std::string baseFile;                          // extract, read
     std::optional<std::string> baseLocale;         // add, create, extract, read, remove
