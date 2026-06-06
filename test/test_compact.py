@@ -50,6 +50,63 @@ def test_compact_nonmpq_file(binary_path):
     assert output_lines[0].startswith(expected_prefix), f"Unexpected output: {output_lines}"
 
 
+def test_compact_mpq_without_listfile(binary_path, generate_mpq_without_internal_listfile):
+    """
+    Test compacting MPQ file with no internal listfile,
+    and no externally provided one.
+
+    This test checks:
+    - That the application exits correctly and prints error message.
+    """
+    _ = generate_mpq_without_internal_listfile
+    script_dir = Path(__file__).parent
+    test_file = script_dir / "data" / "mpq_without_internal_listfile.mpq"
+
+    expected_prefix = "[!] Failed to compact archive: (10007) At least one file name is unknown (listfile is incomplete)"
+
+    result = subprocess.run(
+        [str(binary_path), "compact", str(test_file)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
+
+    output_lines = result.stderr.splitlines()
+
+    assert result.returncode == 1, f"mpqcli failed with error: {result.stderr}"
+    assert len(output_lines) == 1, f"Unexpected output: {output_lines}"
+    assert output_lines[0].startswith(expected_prefix), f"Unexpected output: {output_lines}"
+
+
+def test_compact_mpq_with_listfile(binary_path, generate_mpq_without_internal_listfile):
+    """
+    Test compacting MPQ file with no internal listfile,
+    instead providing an external one.
+
+    This test checks:
+    - That compaction works when the user provides an external listfile.
+    """
+    _ = generate_mpq_without_internal_listfile
+    script_dir = Path(__file__).parent
+    test_file = script_dir / "data" / "mpq_without_internal_listfile.mpq"
+    listfile = script_dir / "data" / "listfile.txt"
+    listfile.write_text("cats.txt\ndogs.txt\ncapybaras.txt")
+
+    expected_output = ["[*] Compacting archive. This may take some time..."]
+
+    result = subprocess.run(
+        [str(binary_path), "compact", str(test_file), "--listfile", str(listfile)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
+
+    output_lines = result.stdout.splitlines()
+
+    assert result.returncode == 0, f"mpqcli failed with error: {result.stderr}"
+    assert output_lines == expected_output, f"Unexpected output: {output_lines}"
+
+
 def test_compact_file(binary_path):
     """
     Test compacting an MPQ archive.
