@@ -40,9 +40,8 @@ RUN cmake -B build \
 RUN cmake --build build
 
 # Set up Python test environment
-RUN python3 -m venv test/venv && \
-    . test/venv/bin/activate
-RUN pip3 install -r test/requirements.txt
+RUN python3 -m venv test/venv
+RUN test/venv/bin/pip install -r test/requirements.txt
 
 # Default command runs Valgrind on the binary
 CMD ["valgrind", "--leak-check=full", "--show-leak-kinds=all", "--track-origins=yes", "--verbose", "./build/bin/mpqcli", "version"]
