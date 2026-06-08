@@ -63,7 +63,7 @@ if [ "$USE_DOCKER" = true ]; then
 
     # Run tests in Docker with Valgrind wrapper
     echo -e "${YELLOW}Running pytest with Valgrind...${NC}"
-    docker run --rm -v "$PROJECT_DIR":/mpqcli mpqcli-valgrind bash -c "
+    docker run --rm -v "$VALGRIND_LOG_DIR":/mpqcli/valgrind_logs mpqcli-valgrind bash -c "
         # Create Valgrind wrapper script
         cat > /tmp/mpqcli_wrapper.sh << 'EOF'
 #!/bin/bash
