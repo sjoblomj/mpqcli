@@ -21,9 +21,6 @@ jobs:
         with:
           submodules: true
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Build Valgrind Docker image
         run: |
           docker build \
@@ -37,18 +34,17 @@ jobs:
         run: |
           mkdir -p valgrind_logs
           docker run --rm \
-            -v $(pwd)/test:/mpqcli/test:rw \
-            -v $(pwd)/valgrind_logs:/mpqcli/valgrind_logs:rw \
+            -v "$(pwd)/valgrind_logs:/mpqcli/valgrind_logs:rw" \
             mpqcli-valgrind bash -c '
-            cp /mpqcli/build/bin/mpqcli /mpqcli/build/bin/mpqcli.real
-            cat > /mpqcli/build/bin/mpqcli << "EOF"
+            cat > /mpqcli/build/bin/mpqcli.valgrind << "EOF"
           #!/bin/bash
           exec valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes \
             --log-file=/mpqcli/valgrind_logs/valgrind_$$.log \
-            /mpqcli/build/bin/mpqcli.real "$@"
+            /mpqcli/build/bin/mpqcli "$@"
           EOF
-            chmod +x /mpqcli/build/bin/mpqcli
-            cd /mpqcli && python3 -m pytest test -v --tb=short
+            chmod +x /mpqcli/build/bin/mpqcli.valgrind
+            export MPQCLI_BIN=/mpqcli/build/bin/mpqcli.valgrind
+            cd /mpqcli && test/venv/bin/python -m pytest test -v --tb=short
           '
 
       - name: Analyze Valgrind results
