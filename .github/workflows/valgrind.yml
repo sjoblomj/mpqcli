@@ -3,17 +3,27 @@ name: Valgrind Memory Leak Check
 on:
   pull_request:
     branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'extern/**'
+      - 'test/**'
+      - 'Dockerfile.valgrind'
+      - 'CMakeLists.txt'
+      - '.github/workflows/valgrind.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
   pull-requests: write
 
+concurrency:
+  group: valgrind-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   valgrind:
     runs-on: ubuntu-24.04
-    # This job is allowed to fail without blocking PR merges
-    continue-on-error: true
+    timeout-minutes: 60
 
     steps:
       - name: Check out repository code
@@ -50,51 +60,34 @@ jobs:
       - name: Analyze Valgrind results
         id: analyze
         run: |
-          # Count total errors across all log files
-          total_errors=0
-          total_leaks=0
+          total_logs=$(find valgrind_logs -maxdepth 1 -type f -name '*.log' 2>/dev/null | wc -l)
+          logs_with_errors=$(grep -lE "ERROR SUMMARY: [1-9][0-9]* errors" valgrind_logs/*.log 2>/dev/null | wc -l)
+          logs_with_leaks=$(grep -lE "(definitely|indirectly) lost: [1-9][0-9,]* bytes" valgrind_logs/*.log 2>/dev/null | wc -l)
 
-          if [ -d "valgrind_logs" ] && [ "$(ls -A valgrind_logs)" ]; then
-            for log in valgrind_logs/*.log; do
-              if [ -f "$log" ]; then
-                errors=$(grep -c "ERROR SUMMARY:" "$log" || echo "0")
-                leaks=$(grep -c "definitely lost:" "$log" || echo "0")
-                total_errors=$((total_errors + errors))
-                total_leaks=$((total_leaks + leaks))
-              fi
-            done
-          fi
+          echo "Total logs analyzed: $total_logs"
+          echo "Logs with errors:    $logs_with_errors"
+          echo "Logs with leaks:     $logs_with_leaks"
 
-          echo "Total error summaries found: $total_errors"
-          echo "Total leak reports found: $total_leaks"
-
-          # Create summary
           echo "## Valgrind Memory Leak Analysis" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### All Subcommands Tested via pytest suite:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- \`create\` - Create MPQ archives" >> $GITHUB_STEP_SUMMARY
-          echo "- \`add\` - Add files to archives" >> $GITHUB_STEP_SUMMARY
-          echo "- \`remove\` - Remove files from archives" >> $GITHUB_STEP_SUMMARY
-          echo "- \`list\` - List archive contents" >> $GITHUB_STEP_SUMMARY
-          echo "- \`extract\` - Extract files from archives" >> $GITHUB_STEP_SUMMARY
-          echo "- \`read\` - Read files from archives" >> $GITHUB_STEP_SUMMARY
-          echo "- \`verify\` - Verify archive signatures" >> $GITHUB_STEP_SUMMARY
-          echo "- \`info\` - Display archive information" >> $GITHUB_STEP_SUMMARY
-          echo "- \`about\` - Display program information" >> $GITHUB_STEP_SUMMARY
-          echo "- \`version\` - Display program version" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
 
-          if [ "$total_errors" -eq 0 ] && [ "$total_leaks" -eq 0 ]; then
-            echo "✅ **No memory leaks detected in any subcommand!**" >> $GITHUB_STEP_SUMMARY
+          if [ "$logs_with_errors" -eq 0 ] && [ "$logs_with_leaks" -eq 0 ]; then
+            echo "✅ **No memory leaks detected.**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- Logs analyzed: $total_logs" >> $GITHUB_STEP_SUMMARY
             echo "status=success" >> $GITHUB_OUTPUT
           else
             echo "⚠️ **Potential memory issues detected**" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "- Error summaries: $total_errors" >> $GITHUB_STEP_SUMMARY
-            echo "- Leak reports: $total_leaks" >> $GITHUB_STEP_SUMMARY
+            echo "- Logs analyzed:    $total_logs" >> $GITHUB_STEP_SUMMARY
+            echo "- Logs with errors: $logs_with_errors" >> $GITHUB_STEP_SUMMARY
+            echo "- Logs with leaks:  $logs_with_leaks" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "#### Logs with leaks" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            grep -lE "(definitely|indirectly) lost: [1-9][0-9,]* bytes" valgrind_logs/*.log 2>/dev/null >> $GITHUB_STEP_SUMMARY || true
+            echo '```' >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "Please review the Valgrind logs for details." >> $GITHUB_STEP_SUMMARY
             echo "status=warning" >> $GITHUB_OUTPUT
@@ -102,21 +95,52 @@ jobs:
 
       - name: Upload Valgrind logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: valgrind-logs
           path: |
             valgrind_logs/
           retention-days: 30
 
-      - name: Comment on PR (if leaks found)
-        if: github.event_name == 'pull_request' && steps.analyze.outputs.status == 'warning'
-        uses: actions/github-script@v7
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v9
         with:
           script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
+            const marker = '<!-- valgrind-leak-check -->';
+            const status = '${{ steps.analyze.outputs.status }}';
+            const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+
+            const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '⚠️ **Valgrind detected potential memory leaks**\n\nPlease review the [Valgrind logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.\n\n*Note: This check is informational and does not block merging.*'
-            })
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body && c.body.startsWith(marker));
+
+            if (status === 'warning') {
+              const body = `${marker}\n⚠️ **Valgrind detected potential memory leaks**\n\nPlease review the [Valgrind logs](${runUrl}) for details.\n\n*Note: This check is informational and does not block merging.*`;
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existing.id,
+                  body,
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  body,
+                });
+              }
+            } else if (existing) {
+              const body = `${marker}\n✅ **No Valgrind memory leaks detected.**\n\nIssues reported by an earlier run on this PR have been resolved. See the latest [Valgrind logs](${runUrl}).`;
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            }
