@@ -237,7 +237,7 @@ int AddFiles(HANDLE archive, const std::string &input_path, const std::string &p
                     if (disk_size == static_cast<uintmax_t>(archived_size)) {
                         const DWORD attr_flags = SFileGetAttributes(archive);
 
-                        // Step 1: Timestamp — cheapest check, no local file I/O.
+                        // Step 1: Timestamp: cheapest check, no local file I/O.
                         if (!skip && (attr_flags & MPQ_ATTRIBUTE_FILETIME)) {
                             const uint64_t archived_time =
                                 GetFileInfo<uint64_t>(file, SFileInfoFileTime);
@@ -250,15 +250,20 @@ int AddFiles(HANDLE archive, const std::string &input_path, const std::string &p
                             }
                         }
 
-                        // Step 2: MD5 — if timestamp did not match or was unavailable.
+                        // Step 2: MD5: if timestamp did not match or was unavailable.
                         if (!skip && (attr_flags & MPQ_ATTRIBUTE_MD5)) {
-                            // Retrieve the MD5 stored in (attributes) via TFileEntry.
+                            // StormLib has no SFileInfoMD5 class, so SFileInfoFileEntry
+                            // (TFileEntry, declared in StormLib.h) is the only public way
+                            // to read the MD5 stored in (attributes).
                             // Buffer must accommodate the struct plus the trailing filename.
                             constexpr DWORD entry_buf_size = sizeof(TFileEntry) + 1024;
                             uint8_t fe_buf[entry_buf_size]{};
                             if (SFileGetFileInfo(file, SFileInfoFileEntry, fe_buf, entry_buf_size,
                                                  nullptr)) {
                                 const auto *fe = reinterpret_cast<const TFileEntry *>(fe_buf);
+                                // An all-zero digest means "no MD5 stored". A file whose
+                                // real MD5 is all zeroes is astronomically unlikely; the
+                                // worst case is a redundant re-add.
                                 const uint8_t zero_md5[MD5_DIGEST_SIZE]{};
                                 if (std::memcmp(fe->md5, zero_md5, MD5_DIGEST_SIZE) != 0) {
                                     uint8_t local_md5[MD5_DIGEST_SIZE]{};
@@ -272,9 +277,11 @@ int AddFiles(HANDLE archive, const std::string &input_path, const std::string &p
                             }
                         }
 
-                        // Step 3: CRC32 — if neither timestamp nor MD5 matched or was available.
+                        // Step 3: CRC32: if neither timestamp nor MD5 matched or was available.
                         if (!skip && (attr_flags & MPQ_ATTRIBUTE_CRC32)) {
                             const DWORD archived_crc32 = GetFileInfo<DWORD>(file, SFileInfoCRC32);
+                            // Zero means "no CRC32 stored"; a file whose real CRC32 is
+                            // zero just gets a redundant re-add.
                             if (archived_crc32 != 0) {
                                 if (auto local_crc32 = ComputeFileCrc32(entry.path())) {
                                     skip = (*local_crc32 == archived_crc32);

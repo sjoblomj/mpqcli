@@ -75,6 +75,12 @@ The skip decision follows this chain:
    - **No attributes** – if the archive has no `(attributes)` file, the file is always
      re-added even when sizes match, because no reliable content check is possible.
 
+Note: a timestamp match alone skips the file, without comparing checksums. A file whose
+content changed but whose size and modification time were both preserved (for example by
+`cp -p` or tools that restore timestamps) will therefore not be detected as changed. This
+is the same trade-off tools like `rsync` make by default. If exact change detection
+matters, pass `--overwrite` without `--update` to unconditionally replace every file.
+
 ```bash
 $ mpqcli add wow-patch.mpq textures/ --update --overwrite
 [~] Skipping unchanged file: Creature\Bear\Bear.blp

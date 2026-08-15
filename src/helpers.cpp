@@ -169,10 +169,19 @@ bool ComputeFileMd5(const fs::path &path, uint8_t *md5_out) {
 // Returns the file's last-modification time as a Windows FILETIME value
 // (100-nanosecond intervals since 1601-01-01 UTC).  Returns 0 on error.
 uint64_t LocalFileTimestamp(const fs::path &path) {
+#ifdef _WIN32
+    // _wstat64 handles paths with non-ASCII characters, which the narrow
+    // stat() would mangle on Windows.
+    struct _stat64 st {};
+    if (_wstat64(path.wstring().c_str(), &st) != 0) {
+        return 0;
+    }
+#else
     struct stat st {};
     if (stat(path.string().c_str(), &st) != 0) {
         return 0;
     }
+#endif
     constexpr int64_t epoch_diff = 11644473600LL;
     return static_cast<uint64_t>((static_cast<int64_t>(st.st_mtime) + epoch_diff) * 10000000LL);
 }
