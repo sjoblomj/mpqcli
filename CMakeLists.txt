@@ -64,6 +64,24 @@ if(BUILD_MPQCLI)
 
     add_subdirectory(extern/CLI11)
 
+    # Handle hash-library dependency (CRC32 + MD5 for the add --update checks)
+    if (NOT EXISTS "${CMAKE_SOURCE_DIR}/extern/hash-library/crc32.cpp")
+        message(FATAL_ERROR
+    "Missing dependency: hash-library
+    mpqcli requires the hash-library library.
+    It is provided as a submodule of this repository.
+    Did you forget to execute the following commands?
+       git submodule init
+       git submodule update")
+    endif()
+
+    # hash-library ships no CMakeLists; compile only the two algorithms we use
+    add_library(hash-library STATIC
+        extern/hash-library/crc32.cpp
+        extern/hash-library/md5.cpp
+    )
+    target_include_directories(hash-library SYSTEM INTERFACE "${CMAKE_SOURCE_DIR}/extern")
+
     # Add the main application
     add_subdirectory(src)
 endif()
