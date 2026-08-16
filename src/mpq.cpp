@@ -252,24 +252,15 @@ int AddFiles(HANDLE archive, const std::string &input_path, const std::string &p
 
                         // Step 2: MD5: if timestamp did not match or was unavailable.
                         if (!skip && (attr_flags & MPQ_ATTRIBUTE_MD5)) {
-                            // StormLib has no SFileInfoMD5 class, so SFileInfoFileEntry
-                            // (TFileEntry, declared in StormLib.h) is the only public way
-                            // to read the MD5 stored in (attributes).
-                            // Buffer must accommodate the struct plus the trailing filename.
-                            constexpr DWORD entry_buf_size = sizeof(TFileEntry) + 1024;
-                            uint8_t fe_buf[entry_buf_size]{};
-                            if (SFileGetFileInfo(file, SFileInfoFileEntry, fe_buf, entry_buf_size,
-                                                 nullptr)) {
-                                const auto *fe = reinterpret_cast<const TFileEntry *>(fe_buf);
-                                // An all-zero digest means "no MD5 stored". A file whose
-                                // real MD5 is all zeroes is astronomically unlikely; the
-                                // worst case is a redundant re-add.
+                            uint8_t archived_md5[MD5_DIGEST_SIZE]{};
+                            if (SFileGetFileInfo(file, SFileInfoMD5, archived_md5,
+                                                 sizeof(archived_md5), nullptr)) {
                                 const uint8_t zero_md5[MD5_DIGEST_SIZE]{};
-                                if (std::memcmp(fe->md5, zero_md5, MD5_DIGEST_SIZE) != 0) {
+                                if (std::memcmp(archived_md5, zero_md5, MD5_DIGEST_SIZE) != 0) {
                                     uint8_t local_md5[MD5_DIGEST_SIZE]{};
                                     if (ComputeFileMd5(entry.path(), local_md5)) {
-                                        skip =
-                                            (std::memcmp(local_md5, fe->md5, MD5_DIGEST_SIZE) == 0);
+                                        skip = (std::memcmp(local_md5, archived_md5,
+                                                            MD5_DIGEST_SIZE) == 0);
                                         if (skip)
                                             skip_reason = "MD5 matches";
                                     }
