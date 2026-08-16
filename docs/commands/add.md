@@ -56,38 +56,6 @@ $ mpqcli add wow-patch.mpq textures/ --path textures
 [+] Adding file: textures\Creature\Wolf\Wolf.blp
 ```
 
-## Skip unchanged files with --update
-
-When adding a directory, the `--update` flag skips files that have not changed since they
-were last added to the archive. This is useful for incremental updates where only changed
-files need to be re-added.
-
-The skip decision follows this chain:
-
-1. **File size** must match. If the sizes differ the file is always re-added.
-2. If the sizes match, the archive's `(attributes)` file is consulted:
-   - **Timestamp** – if the archive stores file timestamps, the local file's
-     last-modification time is compared at one-second resolution. A match skips the file.
-   - **MD5** – if the timestamp did not match or is unavailable, and the archive stores MD5
-     checksums, the MD5 of the local file is computed and compared. A match skips the file.
-   - **CRC32** – if neither timestamp nor MD5 produced a match or was available, and the
-     archive stores CRC32 checksums, those are compared. A match skips the file.
-   - **No attributes** – if the archive has no `(attributes)` file, the file is always
-     re-added even when sizes match, because no reliable content check is possible.
-
-Note: a timestamp match alone skips the file, without comparing checksums. A file whose
-content changed but whose size and modification time were both preserved (for example by
-`cp -p` or tools that restore timestamps) will therefore not be detected as changed. This
-is the same trade-off tools like `rsync` make by default. If exact change detection
-matters, pass `--overwrite` without `--update` to unconditionally replace every file.
-
-```bash
-$ mpqcli add wow-patch.mpq textures/ --update --overwrite
-[~] Skipping unchanged file: Creature\Bear\Bear.blp
-[+] Adding file: Creature\Wolf\Wolf.blp
-[*] For textures: 1 files added, 1 files skipped, 0 files failed.
-```
-
 ## Control where files are stored
 
 For single files, one can specify both directory and filename in one step using `-p` or `--path`:
@@ -140,4 +108,61 @@ Use `-g` or `--game` to apply the compression and encryption rules for a specifi
 ```bash
 $ mpqcli add archive.mpq khwhat1.wav --game warcraft2
 [+] Adding file: khwhat1.wav
+```
+
+## Skip unchanged files with --update
+
+When adding a directory, the `--update` flag skips files that have not changed since they
+were last added to the archive. This is useful for incremental updates where only changed
+files need to be re-added.
+
+The skip decision follows this chain:
+
+1. **File size** must match. If the sizes differ the file is always re-added.
+2. If the sizes match, the archive's `(attributes)` file is consulted:
+   - **Timestamp** – if the archive stores file timestamps, the local file's
+     last-modification time is compared at one-second resolution. A match skips the file.
+   - **MD5** – if the timestamp did not match or is unavailable, and the archive stores MD5
+     checksums, the MD5 of the local file is computed and compared. A match skips the file.
+   - **CRC32** – if neither timestamp nor MD5 produced a match or was available, and the
+     archive stores CRC32 checksums, those are compared. A match skips the file.
+   - **No attributes** – if the archive has no `(attributes)` file, the file is always
+     re-added even when sizes match, because no reliable content check is possible.
+
+Note: a timestamp match alone skips the file, without comparing checksums. A file whose
+content changed but whose size and modification time were both preserved (for example by
+`cp -p` or tools that restore timestamps) will therefore not be detected as changed. This
+is the same trade-off tools like `rsync` make by default. If exact change detection
+matters, pass `--overwrite` without `--update` to unconditionally replace every file.
+
+```bash
+$ mpqcli add wow-patch.mpq textures/ --update --overwrite
+[~] Skipping unchanged file: Creature\Bear\Bear.blp
+[+] Adding file: Creature\Wolf\Wolf.blp
+[*] For textures: 1 files added, 1 files skipped, 0 files failed.
+```
+
+Flow chart of update method:
+
+```mermaid
+flowchart TD
+    A[Start] --> FS{File size matches}
+    
+    FS -->|No| U[Update file]
+    FS -->|Yes| TE{Timestamps matches}
+    
+    TE -->|Yes| S[Skip]
+    TE -->|No| MX{MD5 exists}
+    
+    MX -->|Yes| MD{MD5 matches}
+    MX -->|No| CX{CRC32 exists}
+    
+    MD -->|Yes| S
+    MD -->|No| U
+    
+    CX -->|Yes| CE{CRC32 matches}
+    CX -->|No| U
+    
+    CE -->|Yes| S
+    CE -->|No| U
 ```
