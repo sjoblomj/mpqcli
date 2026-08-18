@@ -48,6 +48,11 @@ Did you forget to execute the following commands?
    git submodule update")
 endif()
 
+# Use StormLib's bundled zlib/bzip2/libtommath sources instead of requiring
+# system packages. This keeps mpqcli buildable everywhere (musl/glibc Docker
+# images, MSVC, plain `cmake -B build`) without extra system dependencies.
+set(STORM_USE_BUNDLED_LIBRARIES ON CACHE BOOL "" FORCE)
+
 add_subdirectory(extern/StormLib)
 
 # Handle CLI11 dependency
