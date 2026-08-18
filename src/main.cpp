@@ -40,6 +40,8 @@ int main(int argc, char **argv) {
     std::vector<std::string> add_files;
     // CLI: remove
     std::vector<std::string> remove_files;
+    // CLI: rename
+    std::string rename_new_file;
     // CLI: extract
     bool extract_keep_folder_structure = false;
     // CLI: create
@@ -193,6 +195,15 @@ int main(int argc, char **argv) {
         ->expected(-1);
     remove->add_option("--locale", base_locale, "Locale of file to remove")->check(locale_valid);
 
+    // Subcommand: Rename
+    CLI::App *rename = app.add_subcommand("rename", "Rename a file in an existing MPQ archive");
+    rename->add_option("archive", base_target, "Target MPQ archive")
+        ->required()
+        ->check(CLI::ExistingFile);
+    rename->add_option("old-file", base_file, "Current archive path of the file")->required();
+    rename->add_option("new-file", rename_new_file, "New archive path of the file")->required();
+    rename->add_option("--locale", base_locale, "Locale of file to rename")->check(locale_valid);
+
     // Subcommand: List
     CLI::App *list = app.add_subcommand("list", "List files from the MPQ archive");
     list->add_option("target", base_target, "Target MPQ archive")
@@ -317,6 +328,10 @@ int main(int argc, char **argv) {
             }
         }
         return HandleRemove(resolved_remove_files, base_target, base_locale);
+    }
+
+    if (app.got_subcommand(rename)) {
+        return HandleRename(base_file, rename_new_file, base_target, base_locale);
     }
 
     if (app.got_subcommand(list)) {

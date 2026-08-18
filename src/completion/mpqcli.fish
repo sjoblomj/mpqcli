@@ -40,7 +40,7 @@ set -l __mpqcli_list_properties \
     flags encryption-key encryption-key-raw
 
 # Top-level subcommands (no subcommand active yet)
-complete -c mpqcli -n 'not __fish_seen_subcommand_from version about info create add remove list extract read verify compact completion' \
+complete -c mpqcli -n 'not __fish_seen_subcommand_from version about info create add remove rename list extract read verify compact completion' \
     -a version   -d 'Print program version'
 complete -c mpqcli -n 'not __fish_seen_subcommand_from version about info create add remove list extract read verify compact completion' \
     -a about     -d 'Print program information'
@@ -50,9 +50,11 @@ complete -c mpqcli -n 'not __fish_seen_subcommand_from version about info create
     -a create    -d 'Create an MPQ archive from a file or directory'
 complete -c mpqcli -n 'not __fish_seen_subcommand_from version about info create add remove list extract read verify compact completion' \
     -a add       -d 'Add files to an existing MPQ archive'
-complete -c mpqcli -n 'not __fish_seen_subcommand_from version about info create add remove list extract read verify compact completion' \
+complete -c mpqcli -n 'not __fish_seen_subcommand_from version about info create add remove rename list extract read verify compact completion' \
     -a remove    -d 'Remove files from an existing MPQ archive'
-complete -c mpqcli -n 'not __fish_seen_subcommand_from version about info create add remove list extract read verify compact completion' \
+complete -c mpqcli -n 'not __fish_seen_subcommand_from version about info create add remove rename list extract read verify compact completion' \
+    -a rename    -d 'Rename a file in an existing MPQ archive'
+complete -c mpqcli -n 'not __fish_seen_subcommand_from version about info create add remove rename list extract read verify compact completion' \
     -a list      -d 'List files in an MPQ archive'
 complete -c mpqcli -n 'not __fish_seen_subcommand_from version about info create add remove list extract read verify compact completion' \
     -a extract   -d 'Extract files from an MPQ archive'
