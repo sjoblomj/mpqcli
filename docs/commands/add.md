@@ -146,23 +146,27 @@ Flow chart of update method:
 
 ```mermaid
 flowchart TD
-    A[Start] --> FS{File size matches}
-    
-    FS -->|No| U[Update file]
-    FS -->|Yes| TE{Timestamps matches}
-    
-    TE -->|Yes| S[Skip]
-    TE -->|No| MX{MD5 exists}
-    
-    MX -->|Yes| MD{MD5 matches}
+    A[Start] --> SM{File size matches}
+
+    SM -->|Yes| TM{Timestamps matches}
+    SM -->|No| U[Update file]
+
+    TM -->|Yes| S[Skip]
+    TM -->|No| MX{MD5 exists}
+
+    MX -->|Yes| MM{MD5 matches}
     MX -->|No| CX{CRC32 exists}
-    
-    MD -->|Yes| S
-    MD -->|No| U
-    
-    CX -->|Yes| CE{CRC32 matches}
+
+    MM -->|Yes| S
+    MM -->|No| U
+
+    CX -->|Yes| CM{CRC32 matches}
     CX -->|No| U
-    
-    CE -->|Yes| S
-    CE -->|No| U
+
+    CM -->|Yes| S
+    CM -->|No| U
+
+    %% Layout hint
+    MM ~~~ U
+    CM ~~~ S
 ```
