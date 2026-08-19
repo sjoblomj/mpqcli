@@ -370,3 +370,28 @@ def verify_archive_content(binary_path, target_file, expected_output, listfile=P
     )
     output_lines = set(result.stdout.splitlines())
     assert output_lines == expected_output, f"Unexpected output: {output_lines}"
+
+
+def test_rename_converts_forward_slashes_to_backslashes(binary_path, generate_mpq_without_internal_listfile):
+    """A new name containing forward slashes is stored using the backslash
+    separator that MPQ archives use, matching how add and create store paths."""
+    script_dir = Path(__file__).parent
+    target_file = script_dir / "data" / "mpq_without_internal_listfile.mpq"
+    listfile = script_dir / "data" / "listfile.txt"
+    listfile.write_text("cats.txt\ndogs.txt\ncapybaras.txt\ndeep\\renamed.txt\n")
+
+    result = subprocess.run(
+        [str(binary_path), "rename", str(target_file), "capybaras.txt", "deep/renamed.txt"],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+    )
+
+    assert result.returncode == 0, f"mpqcli failed with error: {result.stderr}"
+    assert "[~] Renaming file: capybaras.txt -> deep\\renamed.txt" in result.stdout
+
+    result = subprocess.run(
+        [str(binary_path), "list", str(target_file), "--listfile", str(listfile)],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+    )
+    assert result.returncode == 0
+    assert "deep\\renamed.txt" in result.stdout
+    assert "deep/renamed.txt" not in result.stdout
