@@ -3,7 +3,7 @@
 Rename a file in an existing MPQ archive without extracting and re-adding it.
 The archive is the first positional argument, followed by the current and new archive paths.
 This operation does not cause MPQ fragmentation, and thus it is not necessary to
-[`compact`](compact.html) the archive.
+[`compact`](compact.md) the archive.
 
 ```bash
 $ mpqcli rename wow-patch.mpq old-name.txt new-name.txt

@@ -13,7 +13,8 @@
 
 int main(int argc, char **argv) {
     CLI::App app{
-        "A command line tool to create, add, remove, list, extract, read, and verify MPQ archives "
+        "A command line tool to create, add, remove, list, extract, read, rename, and verify MPQ "
+        "archives "
         "using the StormLib library"};
 
     app.require_subcommand(1);
