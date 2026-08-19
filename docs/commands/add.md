@@ -74,16 +74,31 @@ $ mpqcli add wow-patch.mpq textures/ --path textures
 [*] For textures: 2 files added, 0 files skipped, 0 files failed.
 ```
 
-## Overwrite existing files
+## Replacing files that already exist
 
-Without `--overwrite`, any file that already exists in the archive is skipped:
+`add` never replaces an archived file unless you ask it to. Two flags control what
+happens when a file is already present, and they are **mutually exclusive**, passing
+both is an error, because "replace everything" and "replace only what changed" are
+contradictory requests.
+
+| Flags | Behaviour when the file already exists |
+| --- | --- |
+| *(neither)* | Skip it and leave the archived copy alone |
+| `-w`, `--overwrite` | Replace it unconditionally |
+| `-u`, `--update` | Replace it only if the local file differs |
+
+### Default: skip
+
+Without either flag, an existing file is skipped. This is a normal outcome, not an
+error, so the exit code is still `0`:
 
 ```bash
 $ mpqcli add wow-patch.mpq allegiance.txt
 [!] File already exists in MPQ archive: allegiance.txt - Skipping...
+[*] 1 file(s) already in the archive were skipped. Use --overwrite to replace them, or --update to replace only the ones that changed.
 ```
 
-Set `-w` or `--overwrite` to replace it:
+### `--overwrite`: replace unconditionally
 
 ```bash
 $ mpqcli add wow-patch.mpq allegiance.txt --overwrite
@@ -110,11 +125,12 @@ $ mpqcli add archive.mpq khwhat1.wav --game warcraft2
 [+] Adding file: khwhat1.wav
 ```
 
-## Skip unchanged files with --update
+## Replace only what changed with --update
 
-When adding a directory, the `--update` flag skips files that have not changed since they
-were last added to the archive. This is useful for incremental updates where only changed
-files need to be re-added.
+The `--update` flag replaces a file only when the local copy differs from the archived
+one, and skips it otherwise. This is useful for incremental updates where only changed
+files need to be re-added. It applies to single files and directories alike, the
+comparison is always made per file.
 
 The skip decision follows this chain:
 
@@ -133,13 +149,21 @@ Note: a timestamp match alone skips the file, without comparing checksums. A fil
 content changed but whose size and modification time were both preserved (for example by
 `cp -p` or tools that restore timestamps) will therefore not be detected as changed. This
 is the same trade-off tools like `rsync` make by default. If exact change detection
-matters, pass `--overwrite` without `--update` to unconditionally replace every file.
+matters, use `--overwrite` instead of `--update` to unconditionally replace every file.
 
 ```bash
-$ mpqcli add wow-patch.mpq textures/ --update --overwrite
-[~] Skipping unchanged file: Creature\Bear\Bear.blp
+$ mpqcli add wow-patch.mpq textures/ --update
+[~] Skipping unchanged file: Creature\Bear\Bear.blp (MD5 matches)
+[+] File already exists in MPQ archive: Creature\Wolf\Wolf.blp - Overwriting...
 [+] Adding file: Creature\Wolf\Wolf.blp
 [*] For textures: 1 files added, 1 files skipped, 0 files failed.
+```
+
+The same comparison applies when the target is a single file:
+
+```bash
+$ mpqcli add wow-patch.mpq allegiance.txt --update
+[~] Skipping unchanged file: allegiance.txt (MD5 matches)
 ```
 
 Flow chart of update method:

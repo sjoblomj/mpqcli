@@ -34,7 +34,9 @@ def test_add_target_file_does_not_exist(binary_path, generate_test_files):
         text=True
     )
 
-    assert result.returncode == 0, f"mpqcli failed with error: {result.stderr}"
+    # A path that does not exist is a real failure, even though the run continues
+    # on to any remaining inputs.
+    assert result.returncode == 1, f"mpqcli failed with error: {result.stderr}"
     assert "[!] Path does not exist:" in result.stderr
 
 
@@ -186,7 +188,7 @@ def test_add_several_files_with_path_to_mpq_archive(binary_path, generate_test_f
     assert output_lines == expected_output, f"Unexpected output: {output_lines}"
 
 
-def test_add_existing_file_without_overwrite_should_fail(binary_path, generate_test_files):
+def test_add_existing_file_without_overwrite_should_skip(binary_path, generate_test_files):
     _ = generate_test_files
     script_dir = Path(__file__).parent
     target_file = script_dir / "data" / "files.mpq"
@@ -212,10 +214,13 @@ def test_add_existing_file_without_overwrite_should_fail(binary_path, generate_t
     output_lines = set(result.stderr.splitlines())
     expected_stderr_output = {
         "[!] File already exists in MPQ archive: cats.txt - Skipping...",
+        "[*] 1 file(s) already in the archive were skipped. Use --overwrite to replace them, "
+        "or --update to replace only the ones that changed.",
     }
     assert output_lines == expected_stderr_output, f"Unexpected output: {output_lines}"
 
-    assert result.returncode == 1, f"mpqcli failed with error: {result.stderr}"
+    # Skipping a pre-existing file is the documented default, not a failure.
+    assert result.returncode == 0, f"mpqcli failed with error: {result.stderr}"
 
     verify_file_in_mpq_has_content(binary_path, target_file, "cats.txt", expected_content)
 
@@ -701,8 +706,10 @@ def test_add_directory_without_overwrite_skips_existing(binary_path, generate_te
             text=True
         )
 
-        assert result.returncode == 1, f"mpqcli failed with error: {result.stderr}"
+        # Skipping pre-existing files is the documented default, not a failure.
+        assert result.returncode == 0, f"mpqcli failed with error: {result.stderr}"
         assert "[!] File already exists in MPQ archive: cats.txt - Skipping..." in result.stderr
+        assert "Use --overwrite to replace them" in result.stderr
 
         verify_file_in_mpq_has_content(binary_path, target_mpq, "cats.txt", original_content)
     finally:
@@ -723,7 +730,7 @@ def test_add_update_skips_unchanged_files(binary_path, generate_test_files):
 
     try:
         result = subprocess.run(
-            [str(binary_path), "add", str(target_mpq), str(update_dir), "--update", "--overwrite"],
+            [str(binary_path), "add", str(target_mpq), str(update_dir), "--update"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True
@@ -752,7 +759,7 @@ def test_add_update_adds_changed_files(binary_path, generate_test_files):
 
     try:
         result = subprocess.run(
-            [str(binary_path), "add", str(target_mpq), str(update_dir), "--update", "--overwrite"],
+            [str(binary_path), "add", str(target_mpq), str(update_dir), "--update"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True
@@ -785,12 +792,12 @@ def test_add_update_second_run_skips_all(binary_path, generate_test_files):
 
     try:
         subprocess.run(
-            [str(binary_path), "add", str(target_mpq), str(update_dir), "--update", "--overwrite"],
+            [str(binary_path), "add", str(target_mpq), str(update_dir), "--update"],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
         )
 
         result = subprocess.run(
-            [str(binary_path), "add", str(target_mpq), str(update_dir), "--update", "--overwrite"],
+            [str(binary_path), "add", str(target_mpq), str(update_dir), "--update"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True
@@ -803,7 +810,68 @@ def test_add_update_second_run_skips_all(binary_path, generate_test_files):
         shutil.rmtree(update_dir, ignore_errors=True)
 
 
-def test_add_update_single_file_emits_warning(binary_path, generate_test_files):
+def test_add_update_single_file_skips_when_unchanged(binary_path, generate_test_files):
+    """--update applies the same change detection to a single file as to a directory."""
+    _ = generate_test_files
+    script_dir = Path(__file__).parent
+    target_mpq = script_dir / "data" / "files.mpq"
+    work_dir = script_dir / "data" / "update_single_unchanged"
+
+    create_mpq_archive_with_attrs_for_test(binary_path, script_dir)
+
+    # Same content as the archived copy, written fresh so the timestamp differs
+    # and the decision falls through to the MD5 comparison.
+    work_dir.mkdir(parents=True, exist_ok=True)
+    (work_dir / "cats.txt").write_text("This is a file about cats.\n")
+
+    try:
+        result = subprocess.run(
+            [str(binary_path), "add", str(target_mpq), str(work_dir / "cats.txt"), "--update"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+
+        assert result.returncode == 0, f"mpqcli failed with error: {result.stderr}"
+        assert "[~] Skipping unchanged file: cats.txt (MD5 matches)" in result.stdout
+        assert "[+] Adding file: cats.txt" not in result.stdout
+    finally:
+        shutil.rmtree(work_dir, ignore_errors=True)
+
+
+def test_add_update_single_file_replaces_when_changed(binary_path, generate_test_files):
+    """The single-file path must still replace a file whose content changed."""
+    _ = generate_test_files
+    script_dir = Path(__file__).parent
+    target_mpq = script_dir / "data" / "files.mpq"
+    work_dir = script_dir / "data" / "update_single_changed"
+
+    create_mpq_archive_with_attrs_for_test(binary_path, script_dir)
+
+    work_dir.mkdir(parents=True, exist_ok=True)
+    (work_dir / "cats.txt").write_text("This cat content is completely different and longer now.")
+
+    try:
+        result = subprocess.run(
+            [str(binary_path), "add", str(target_mpq), str(work_dir / "cats.txt"), "--update"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+
+        assert result.returncode == 0, f"mpqcli failed with error: {result.stderr}"
+        assert "[+] Adding file: cats.txt" in result.stdout
+
+        verify_file_in_mpq_has_content(
+            binary_path, target_mpq, "cats.txt",
+            {"This cat content is completely different and longer now."}
+        )
+    finally:
+        shutil.rmtree(work_dir, ignore_errors=True)
+
+
+def test_add_update_and_overwrite_are_mutually_exclusive(binary_path, generate_test_files):
+    """--overwrite and --update are two points on one axis, so CLI11 must reject both."""
     _ = generate_test_files
     script_dir = Path(__file__).parent
     target_mpq = script_dir / "data" / "files.mpq"
@@ -813,14 +881,14 @@ def test_add_update_single_file_emits_warning(binary_path, generate_test_files):
     test_file = script_dir / "data" / "files" / "cats.txt"
 
     result = subprocess.run(
-        [str(binary_path), "add", str(target_mpq), str(test_file), "--update"],
+        [str(binary_path), "add", str(target_mpq), str(test_file), "--update", "--overwrite"],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True
     )
 
-    assert result.returncode == 1, f"mpqcli failed with error: {result.stderr}"
-    assert "--update is only meaningful when adding a directory" in result.stderr
+    assert result.returncode != 0, "Expected mpqcli to reject --update with --overwrite"
+    assert "excludes" in result.stderr
 
 
 def test_add_update_skips_unchanged_files_via_crc32(binary_path, generate_test_files):
@@ -840,7 +908,7 @@ def test_add_update_skips_unchanged_files_via_crc32(binary_path, generate_test_f
 
     try:
         result = subprocess.run(
-            [str(binary_path), "add", str(target_mpq), str(update_dir), "--update", "--overwrite"],
+            [str(binary_path), "add", str(target_mpq), str(update_dir), "--update"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True
@@ -869,7 +937,7 @@ def test_add_update_adds_changed_files_via_crc32(binary_path, generate_test_file
 
     try:
         result = subprocess.run(
-            [str(binary_path), "add", str(target_mpq), str(update_dir), "--update", "--overwrite"],
+            [str(binary_path), "add", str(target_mpq), str(update_dir), "--update"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True
@@ -899,7 +967,7 @@ def test_add_update_skips_unchanged_files_via_timestamp(binary_path, generate_te
 
     try:
         result = subprocess.run(
-            [str(binary_path), "add", str(target_mpq), str(update_dir), "--update", "--overwrite"],
+            [str(binary_path), "add", str(target_mpq), str(update_dir), "--update"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True
@@ -931,7 +999,7 @@ def test_add_update_adds_changed_files_via_timestamp(binary_path, generate_test_
 
     try:
         result = subprocess.run(
-            [str(binary_path), "add", str(target_mpq), str(update_dir), "--update", "--overwrite"],
+            [str(binary_path), "add", str(target_mpq), str(update_dir), "--update"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True
@@ -959,7 +1027,7 @@ def test_add_update_always_adds_without_attributes(binary_path, generate_test_fi
 
     try:
         result = subprocess.run(
-            [str(binary_path), "add", str(target_mpq), str(update_dir), "--update", "--overwrite"],
+            [str(binary_path), "add", str(target_mpq), str(update_dir), "--update"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True
