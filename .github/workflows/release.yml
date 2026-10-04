@@ -3,9 +3,11 @@ name: Release
 on:
   workflow_call
 
+# id-token: write obtains the OIDC token gpipe uses for cosign keyless signing
 permissions:
   contents: write
   packages: write
+  id-token: write
 
 jobs:
   release_binaries:
@@ -13,66 +15,58 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
+      # Default depth. Nothing here reads git history: get_changelog reads
+      # CHANGELOG.md from the working tree, and gh release create uses the API.
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Resolve release version
+      - name: Resolve release version from the tag
         id: version
-        run: echo "version=$(make get_project_version)" >> "$GITHUB_OUTPUT"
-
-      - name: Download Linux GLIBC binary
-        uses: actions/download-artifact@v8
-        with:
-          name: mpqcli-linux-amd64-glibc
-
-      - name: Download Linux MUSL binary
-        uses: actions/download-artifact@v8
-        with:
-          name: mpqcli-linux-amd64-musl
-
-      - name: Download Linux ARM64 GLIBC binary
-        uses: actions/download-artifact@v8
-        with:
-          name: mpqcli-linux-arm64-glibc
-
-      - name: Download Linux ARM64 MUSL binary
-        uses: actions/download-artifact@v8
-        with:
-          name: mpqcli-linux-arm64-musl
-
-      - name: Download Windows binary
-        uses: actions/download-artifact@v8
-        with:
-          name: mpqcli-windows-amd64.exe
-
-      - name: Extract changelog for this tag
-        id: changelog
         run: |
-          {
-            echo "content<<EOF"
-            make get_changelog TAG="${{ steps.version.outputs.version }}"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          version="${GITHUB_REF_NAME#v}"
+          project_version="$(make get_version)"
+          if [ "$version" != "$project_version" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match the project version ${project_version} in CMakeLists.txt"
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
 
+      - name: Download all build artefacts
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Extract release notes from CHANGELOG.md
+        run: make get_changelog TAG="${GITHUB_REF_NAME}" > /tmp/release-notes.md
+
+      - uses: thomaslaurenson/gpipe@v1
+        with:
+          cosign_sign: true
+
+      # Name every asset. A dist/mpqcli-* glob is shorter and wrong: with
+      # merge-multiple every artefact lands flat in dist/, so the Docker image
+      # tar matches too and is attached to the release as if it were a binary.
       - name: Release package
         run: |
-          gh release create ${{ github.ref_name }} \
-            --title "${{ github.ref_name }}" \
-            --notes "$CHANGELOG_CONTENT" \
-            mpqcli-linux-amd64-glibc \
-            mpqcli-linux-amd64-musl \
-            mpqcli-linux-arm64-glibc \
-            mpqcli-linux-arm64-musl \
-            mpqcli-windows-amd64.exe
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${GITHUB_REF_NAME}" \
+            --notes-file /tmp/release-notes.md \
+            dist/mpqcli-linux-x86_64 \
+            dist/mpqcli-linux-aarch64 \
+            dist/mpqcli-windows-x86_64.exe \
+            install.sh install.ps1 \
+            checksums.txt checksums.txt.sigstore.json
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CHANGELOG_CONTENT: ${{ steps.changelog.outputs.content }}
 
+  # Gated on the release: a registry outage then leaves a complete release with
+  # no image, rather than an image with no release
   release_docker:
     needs: release_binaries
     runs-on: ubuntu-24.04
     steps:
-      - name: Download Docker image artifact
+      - name: Download Docker image artefact
         uses: actions/download-artifact@v8
         with:
           name: mpqcli-docker
@@ -81,13 +75,15 @@ jobs:
         run: |
           docker load -i mpqcli-docker.tar
 
-      - name: Tag Docker image with version
+      - name: Push to GitHub Container Registry
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+          IMAGE: ghcr.io/${{ github.repository }}
+          VERSION: ${{ needs.release_binaries.outputs.version }}
         run: |
-          docker tag mpqcli ghcr.io/thegraydot/mpqcli:${{ needs.release_binaries.outputs.version }}
-          docker tag mpqcli ghcr.io/thegraydot/mpqcli:latest
-
-      - name: Push Docker image to GitHub Container Registry
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-          docker push ghcr.io/thegraydot/mpqcli:${{ needs.release_binaries.outputs.version }}
-          docker push ghcr.io/thegraydot/mpqcli:latest
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+          docker tag mpqcli "$IMAGE:$VERSION"
+          docker tag mpqcli "$IMAGE:latest"
+          docker push "$IMAGE:$VERSION"
+          docker push "$IMAGE:latest"

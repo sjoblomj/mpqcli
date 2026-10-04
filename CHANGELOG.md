@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.12.0 - 2026-10-04
+
+### Added
+
+- Stop cleanly on Ctrl-C, leaving no partial archive behind
+
+### Changed
+
+- Ship one static musl Linux binary per architecture, with the release assets renamed by OS and architecture
+- Publish install scripts and a signed checksums file with each release
+- Run the Docker image in /data so mounted paths need no prefix
+- Print progress and warnings on stderr, leaving stdout for results alone
+- Mark an overwritten file as changed rather than added when adding
+
+### Fixed
+
+- Fail with a non-zero exit code on an unknown subcommand, a missing argument or an internal error
+- Fail with a non-zero exit code when closing, signing, listing or printing a signature fails
+- Complete every locale, game profile and archive path in the zsh, fish and PowerShell scripts
+
+### Removed
+
+- Remove the install scripts from the repository; each release now carries its own
+
 ## 0.11.0 - 2026-09-21
 
 ### Added
