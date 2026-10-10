@@ -1,26 +1,14 @@
 name: Valgrind Memory Leak Check
 
 on:
-  pull_request:
-    branches: [ main ]
-    paths:
-      - 'src/**'
-      - 'app/**'
-      - 'cmake/**'
-      - 'extern/**'
-      - 'test/**'
-      - 'Dockerfile.valgrind'
-      - 'CMakeLists.txt'
-      - '.github/workflows/valgrind.yml'
+  workflow_call:
   workflow_dispatch:
 
+# pull-requests: write is only for the PR comment. A called workflow cannot
+# raise its caller's permissions, so pr.yml grants it on the valgrind job too.
 permissions:
   contents: read
   pull-requests: write
-
-concurrency:
-  group: valgrind-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   valgrind:
@@ -104,8 +92,12 @@ jobs:
             valgrind_logs/
           retention-days: 30
 
+      # The token is read-only on pull requests from forks, so commenting there
+      # would fail the job. The step summary still carries the results.
       - name: Comment on PR
-        if: github.event_name == 'pull_request'
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository
         uses: actions/github-script@v9
         with:
           script: |
