@@ -2,7 +2,6 @@
 build/
 book/
 .venv/
-test/venv/
 test/data/
 valgrind_logs/
 

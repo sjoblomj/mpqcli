@@ -1,47 +1,35 @@
 FROM ubuntu:24.04
 
-# Install build dependencies and Valgrind
-RUN apt-get update
-RUN apt-get install -y \
-    build-essential \
-    cmake \
-    git \
-    valgrind \
-    python3 \
-    python3-pip \
-    python3-venv \
-    sudo
-RUN rm -rf /var/lib/apt/lists/*
+# Build dependencies, Valgrind and Python for the test suite. git is needed by
+# the build, which stamps the commit hash into the version string.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        cmake \
+        git \
+        python3 \
+        python3-venv \
+        valgrind && \
+    rm -rf /var/lib/apt/lists/*
 
-# Create a user with the same UID/GID as the host user (passed as build args)
+# Run as a user with the host user's UID/GID (passed as build args), so the
+# Valgrind logs written to the mounted directory are owned by the host user.
+# The base image ships an "ubuntu" user holding UID/GID 1000, which is the most
+# common host UID, so it is removed first to free them.
 ARG USER_ID=1000
 ARG GROUP_ID=1000
-RUN groupadd -g ${GROUP_ID} mpquser || true && \
-    useradd -m -u ${USER_ID} -g ${GROUP_ID} -s /bin/bash mpquser && \
-    echo "mpquser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+RUN userdel -r ubuntu 2>/dev/null || true && \
+    groupadd -g ${GROUP_ID} mpquser 2>/dev/null || true && \
+    useradd -m -u ${USER_ID} -g ${GROUP_ID} -s /bin/bash mpquser
 
+# Created up front because WORKDIR would create it owned by root, and the build
+# and venv are written into it
+RUN install -d -o ${USER_ID} -g ${GROUP_ID} /mpqcli
 WORKDIR /mpqcli
-
-# Copy the entire project
-COPY . .
-
-# Remove any existing build directory and fix ownership
-RUN rm -rf build && \
-    chown -R mpquser:mpquser /mpqcli
-
-# Switch to non-root user
+COPY --chown=${USER_ID}:${GROUP_ID} . .
 USER mpquser
 
-# Build with debug symbols (needed by Valgrind)
-RUN cmake -B build/dev \
-    -DCMAKE_BUILD_TYPE=Debug \
-    -DMPQCLI_BUILD_APP=ON
-
-RUN cmake --build build/dev
-
-# Set up Python test environment
-RUN python3 -m venv test/venv
-RUN test/venv/bin/pip install -r test/requirements.txt
-
-# Default command runs Valgrind on the binary
-CMD ["valgrind", "--leak-check=full", "--show-leak-kinds=all", "--track-origins=yes", "--verbose", "./build/dev/bin/mpqcli", "version"]
+# Builds the binary, sets up the test environment and runs the suite under
+# Valgrind. See scripts/run_valgrind_tests.sh.
+CMD ["scripts/run_valgrind_tests.sh"]
