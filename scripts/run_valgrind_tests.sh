@@ -16,7 +16,7 @@ NC='\033[0m' # No Color
 
 # Default values
 USE_DOCKER=false
-BUILD_DIR="build"
+BUILD_DIR="build/dev"
 VALGRIND_LOG_DIR="$PROJECT_DIR/valgrind_logs"
 
 # Parse arguments
@@ -65,16 +65,16 @@ if [ "$USE_DOCKER" = true ]; then
     echo -e "${YELLOW}Running pytest with Valgrind...${NC}"
     docker run --rm -v "$VALGRIND_LOG_DIR":/mpqcli/valgrind_logs mpqcli-valgrind bash -c "
         # Replace the binary in place with a Valgrind wrapper
-        mv /mpqcli/build/bin/mpqcli /mpqcli/build/bin/mpqcli.real
-        cat > /mpqcli/build/bin/mpqcli << 'EOF'
+        mv /mpqcli/build/dev/bin/mpqcli /mpqcli/build/dev/bin/mpqcli.real
+        cat > /mpqcli/build/dev/bin/mpqcli << 'EOF'
 #!/bin/bash
 valgrind --leak-check=full \
          --show-leak-kinds=all \
          --track-origins=yes \
          --log-file=/mpqcli/valgrind_logs/valgrind_%p.log \
-         /mpqcli/build/bin/mpqcli.real \"\$@\"
+         /mpqcli/build/dev/bin/mpqcli.real \"\$@\"
 EOF
-        chmod +x /mpqcli/build/bin/mpqcli
+        chmod +x /mpqcli/build/dev/bin/mpqcli
 
         # Run tests
         cd /mpqcli
@@ -95,7 +95,7 @@ else
     if [ ! -f "$PROJECT_DIR/$BUILD_DIR/bin/mpqcli" ]; then
         echo -e "${YELLOW}Binary not found. Building with debug symbols...${NC}"
         cd "$PROJECT_DIR"
-        cmake -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Debug -DBUILD_MPQCLI=ON
+        cmake -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Debug -DMPQCLI_BUILD_APP=ON
         cmake --build "$BUILD_DIR"
     fi
 

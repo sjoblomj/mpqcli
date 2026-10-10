@@ -5,6 +5,8 @@ on:
     branches: [ main ]
     paths:
       - 'src/**'
+      - 'app/**'
+      - 'cmake/**'
       - 'extern/**'
       - 'test/**'
       - 'Dockerfile.valgrind'
@@ -46,14 +48,14 @@ jobs:
           docker run --rm \
             -v "$(pwd)/valgrind_logs:/mpqcli/valgrind_logs:rw" \
             mpqcli-valgrind bash -c '
-            mv /mpqcli/build/bin/mpqcli /mpqcli/build/bin/mpqcli.real
-            cat > /mpqcli/build/bin/mpqcli << "EOF"
+            mv /mpqcli/build/dev/bin/mpqcli /mpqcli/build/dev/bin/mpqcli.real
+            cat > /mpqcli/build/dev/bin/mpqcli << "EOF"
           #!/bin/bash
           exec valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes \
             --log-file=/mpqcli/valgrind_logs/valgrind_$$.log \
-            /mpqcli/build/bin/mpqcli.real "$@"
+            /mpqcli/build/dev/bin/mpqcli.real "$@"
           EOF
-            chmod +x /mpqcli/build/bin/mpqcli
+            chmod +x /mpqcli/build/dev/bin/mpqcli
             cd /mpqcli && test/venv/bin/python -m pytest test -v --tb=short
           '
 

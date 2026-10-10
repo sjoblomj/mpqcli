@@ -33,15 +33,15 @@ RUN rm -rf build && \
 USER mpquser
 
 # Build with debug symbols (needed by Valgrind)
-RUN cmake -B build \
+RUN cmake -B build/dev \
     -DCMAKE_BUILD_TYPE=Debug \
-    -DBUILD_MPQCLI=ON
+    -DMPQCLI_BUILD_APP=ON
 
-RUN cmake --build build
+RUN cmake --build build/dev
 
 # Set up Python test environment
 RUN python3 -m venv test/venv
 RUN test/venv/bin/pip install -r test/requirements.txt
 
 # Default command runs Valgrind on the binary
-CMD ["valgrind", "--leak-check=full", "--show-leak-kinds=all", "--track-origins=yes", "--verbose", "./build/bin/mpqcli", "version"]
+CMD ["valgrind", "--leak-check=full", "--show-leak-kinds=all", "--track-origins=yes", "--verbose", "./build/dev/bin/mpqcli", "version"]
