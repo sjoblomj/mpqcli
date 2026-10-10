@@ -15,7 +15,6 @@ on:
       - "test/**"
       - "CMakeLists.txt"
       - "Dockerfile"
-      - "Dockerfile.valgrind"
       - "scripts/run_valgrind_tests.sh"
       - ".dockerignore"
       - ".gpipe.yml"

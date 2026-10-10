@@ -13,7 +13,7 @@ permissions:
 jobs:
   valgrind:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - name: Check out repository code
@@ -21,67 +21,22 @@ jobs:
         with:
           submodules: true
 
-      - name: Build Valgrind Docker image
+      - name: Install Valgrind
         run: |
-          docker build \
-            --build-arg USER_ID=$(id -u) \
-            --build-arg GROUP_ID=$(id -g) \
-            -t mpqcli-valgrind \
-            -f Dockerfile.valgrind \
-            .
+          sudo apt-get update
+          sudo apt-get install -y valgrind
 
-      - name: Run Valgrind on test suite
-        run: |
-          mkdir -p valgrind_logs
-          docker run --rm \
-            -v "$(pwd)/valgrind_logs:/mpqcli/valgrind_logs:rw" \
-            mpqcli-valgrind bash -c '
-            mv /mpqcli/build/dev/bin/mpqcli /mpqcli/build/dev/bin/mpqcli.real
-            cat > /mpqcli/build/dev/bin/mpqcli << "EOF"
-          #!/bin/bash
-          exec valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes \
-            --log-file=/mpqcli/valgrind_logs/valgrind_$$.log \
-            /mpqcli/build/dev/bin/mpqcli.real "$@"
-          EOF
-            chmod +x /mpqcli/build/dev/bin/mpqcli
-            cd /mpqcli && test/venv/bin/python -m pytest test -v --tb=short
-          '
+      - name: Setup python
+        uses: actions/setup-python@v6
+        with:
+          python-version: 3.11
 
-      - name: Analyze Valgrind results
+      # Builds, runs the suite under Valgrind and writes the step summary. It
+      # exits 0 on findings: this check only warns, and reports through the
+      # status output instead.
+      - name: Run test suite under Valgrind
         id: analyze
-        run: |
-          total_logs=$(find valgrind_logs -maxdepth 1 -type f -name '*.log' 2>/dev/null | wc -l)
-          logs_with_errors=$(grep -lE "ERROR SUMMARY: [1-9][0-9]* errors" valgrind_logs/*.log 2>/dev/null | wc -l)
-          logs_with_leaks=$(grep -lE "(definitely|indirectly) lost: [1-9][0-9,]* bytes" valgrind_logs/*.log 2>/dev/null | wc -l)
-
-          echo "Total logs analyzed: $total_logs"
-          echo "Logs with errors:    $logs_with_errors"
-          echo "Logs with leaks:     $logs_with_leaks"
-
-          echo "## Valgrind Memory Leak Analysis" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          if [ "$logs_with_errors" -eq 0 ] && [ "$logs_with_leaks" -eq 0 ]; then
-            echo "✅ **No memory leaks detected.**" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "- Logs analyzed: $total_logs" >> $GITHUB_STEP_SUMMARY
-            echo "status=success" >> $GITHUB_OUTPUT
-          else
-            echo "⚠️ **Potential memory issues detected**" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "- Logs analyzed:    $total_logs" >> $GITHUB_STEP_SUMMARY
-            echo "- Logs with errors: $logs_with_errors" >> $GITHUB_STEP_SUMMARY
-            echo "- Logs with leaks:  $logs_with_leaks" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "#### Logs with leaks" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            grep -lE "(definitely|indirectly) lost: [1-9][0-9,]* bytes" valgrind_logs/*.log 2>/dev/null >> $GITHUB_STEP_SUMMARY || true
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Please review the Valgrind logs for details." >> $GITHUB_STEP_SUMMARY
-            echo "status=warning" >> $GITHUB_OUTPUT
-          fi
+        run: scripts/run_valgrind_tests.sh
 
       - name: Upload Valgrind logs
         if: always()
